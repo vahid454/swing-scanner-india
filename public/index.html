@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NSE Swing Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <header class="header">
+    <div class="header__brand">
+      <span class="header__logo">◈</span>
+      <div>
+        <h1 class="header__title">NSE Swing Scanner</h1>
+        <span class="header__sub">Breakout-led swing candidates with entry, risk and confirmation factors</span>
+      </div>
+    </div>
+    <div class="header__meta">
+      <span class="badge" id="ws-status">● Connecting…</span>
+      <span class="header__market-time" id="market-time">IST --:--:--</span>
+    </div>
+  </header>
+
+  <section class="controls">
+    <button class="btn btn--primary" id="btn-scan">Run Scan Now</button>
+    <button class="btn btn--ghost"   id="btn-refresh">Refresh</button>
+    <form class="stock-search" id="stock-search">
+      <input id="stock-search-input" name="query" type="search" placeholder="Search stock name or symbol" autocomplete="off" />
+      <button class="btn btn--ghost" type="submit">Search</button>
+    </form>
+    <div class="controls__info">
+      <span>Last scan: <strong id="last-run-time">—</strong></span>
+      <span id="job-status" class="controls__job"></span>
+    </div>
+  </section>
+
+  <!-- Demo mode banner (shown when no API key) -->
+  <div class="demo-banner" id="demo-banner" style="display:none">
+    ⚠️ Running in <strong>demo mode</strong> with mock data.
+    Add <code>FINNHUB_API_KEY</code> to your <code>.env</code> file for live NSE data.
+  </div>
+
+  <main class="results-grid" id="results-grid">
+    <div class="results-grid__empty" id="empty-state">
+      <div class="empty-icon">◈</div>
+      <p>No live scan loaded.</p>
+      <p>Click <strong>Run Scan Now</strong> to fetch current NSE data.</p>
+      <small>Manual scans are saved below with today’s date.</small>
+    </div>
+  </main>
+
+  <section class="history-panel">
+    <div class="history-panel__head">
+      <div>
+        <h2>Scan Calendar</h2>
+        <span>Every manual scan is recorded for review.</span>
+      </div>
+      <button class="btn btn--ghost" id="btn-history" type="button">Refresh history</button>
+    </div>
+    <div class="history-table-wrap">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Type</th>
+            <th>Top setup</th>
+            <th>Grade</th>
+            <th>Score</th>
+            <th>Price</th>
+            <th>Entry</th>
+            <th>Target</th>
+            <th>Scanned</th>
+          </tr>
+        </thead>
+        <tbody id="history-body">
+          <tr><td colspan="10">No scan records yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Card template (cloned per result) -->
+  <template id="card-template">
+    <article class="stock-card">
+      <div class="stock-card__header">
+        <div>
+          <span class="stock-card__symbol">--</span>
+          <span class="stock-card__action">Waiting for confirmation</span>
+        </div>
+        <span class="badge setup-badge">--</span>
+      </div>
+
+      <div class="stock-card__market">
+        <div class="price-tape">
+          <span class="price-tape__label">Live / Last</span>
+          <span class="price-tape__value live-price">--</span>
+          <span class="price-tape__change live-change">--</span>
+        </div>
+        <div class="stock-card__score-wrap">
+          <svg viewBox="0 0 36 36" class="score-ring" aria-hidden="true">
+            <circle class="score-ring__bg"   cx="18" cy="18" r="15.9" />
+            <circle class="score-ring__fill" cx="18" cy="18" r="15.9"
+                    stroke-dasharray="0 100" />
+          </svg>
+          <div class="score-ring__inner">
+            <span class="score-ring__value">--</span>
+            <span class="score-ring__label">score</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="trade-strip">
+        <div class="trade-cell"><span>Entry</span><strong class="entry-val">--</strong></div>
+        <div class="trade-cell"><span>Stop</span><strong class="stop-val">--</strong></div>
+        <div class="trade-cell"><span>Target</span><strong class="target-val">--</strong></div>
+      </div>
+
+      <div class="stock-card__signals"></div>
+
+      <div class="stock-card__sentiment">
+        <div class="sentiment-row">
+          <span class="sentiment-label">Sentiment</span>
+          <span class="sentiment-badge">neutral</span>
+        </div>
+        <p class="sentiment-headline">—</p>
+      </div>
+
+      <div class="stock-card__metrics">
+        <div class="metric"><span class="metric__k">RSI</span><span class="metric__v rsi-val">—</span></div>
+        <div class="metric"><span class="metric__k">Vol×</span><span class="metric__v vol-val">—</span></div>
+        <div class="metric"><span class="metric__k">R:R</span><span class="metric__v rr-val">—</span></div>
+      </div>
+
+      <button class="btn btn--ghost stock-card__open" type="button">Open setup</button>
+    </article>
+  </template>
+
+  <aside class="stock-drawer" id="stock-drawer" hidden>
+    <div class="stock-drawer__backdrop" id="drawer-backdrop"></div>
+    <section class="stock-drawer__panel" aria-live="polite">
+      <button class="stock-drawer__close" id="drawer-close" type="button" aria-label="Close setup">×</button>
+      <div class="stock-drawer__head">
+        <div>
+          <span class="stock-drawer__eyebrow">NSE swing setup</span>
+          <h2 id="drawer-symbol">--</h2>
+          <p id="drawer-action">--</p>
+        </div>
+        <span class="badge" id="drawer-grade">--</span>
+      </div>
+      <div class="drawer-levels">
+        <div><span>Live / Last</span><strong id="drawer-live">--</strong></div>
+        <div><span>Entry zone</span><strong id="drawer-entry">--</strong></div>
+        <div><span>Stop loss</span><strong id="drawer-stop">--</strong></div>
+        <div><span>Target 1</span><strong id="drawer-target">--</strong></div>
+      </div>
+      <div class="drawer-grid">
+        <section>
+          <h3>Key Factors</h3>
+          <ul id="drawer-factors"></ul>
+        </section>
+        <section>
+          <h3>Risk Checks</h3>
+          <ul id="drawer-warnings"></ul>
+        </section>
+      </div>
+      <div class="drawer-notes">
+        <span id="drawer-breakout">Breakout: --</span>
+        <span id="drawer-rr">R:R --</span>
+        <span id="drawer-source">Source: --</span>
+      </div>
+    </section>
+  </aside>
+
+  <footer class="footer">
+    <span>Data: Yahoo Finance NSE + Finnhub fallback · Not financial advice · For educational use only</span>
+    <span id="scan-count">—</span>
+  </footer>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

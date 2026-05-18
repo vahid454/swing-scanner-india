@@ -1,0 +1,9 @@
+# railway.toml — Railway deployment configuration
+[build]
+builder = "dockerfile"
+
+[deploy]
+startCommand = "node src/server.js"
+healthcheckPath = "/api/scanner/results"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"

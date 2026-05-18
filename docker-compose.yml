@@ -1,0 +1,19 @@
+# docker-compose.yml — Local development services
+# Run: docker compose up -d
+# This starts Redis so the app can connect locally.
+# On Railway/Render, Redis is provisioned separately — set REDIS_URL env var.
+
+version: "3.9"
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: nse-scanner-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+volumes:
+  redis_data:
