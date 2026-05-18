@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: swing-scanner-india
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FINNHUB_API_KEY
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: swing-scanner-india-redis
+          property: connectionString
+
+  - type: keyvalue
+    name: swing-scanner-india-redis
+    plan: free
+    region: singapore
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
