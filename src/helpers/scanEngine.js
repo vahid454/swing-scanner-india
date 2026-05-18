@@ -59,8 +59,14 @@ function buildRating(result, marketContext) {
   const breakout = signals.breakout ?? {};
   const marketScore = marketContext?.score ?? marketContext?.primary?.score ?? 50;
   const fundamentalScore = result.fundamentals?.score ?? 50;
+  const peRatio = Number(result.fundamentals?.metrics?.pe);
+  const rsi = Number(signals.rsi);
   const sentimentRiskCount = result.sentiment?.risk_flags?.length ?? 0;
   const warningPenalty = Math.min((signals.warnings?.length ?? 0) * 3, 12);
+  const overheatedRsi = Number.isFinite(rsi) && rsi >= 76;
+  const veryOverheatedRsi = Number.isFinite(rsi) && rsi >= 80;
+  const stretchedValuation = Number.isFinite(peRatio) && peRatio >= 60;
+  const elevatedVolatility = marketContext?.indiaVix?.status && marketContext.indiaVix.status !== "calm";
 
   let potentialScore = result.composite;
   potentialScore += (marketScore - 50) * 0.18;
@@ -83,6 +89,11 @@ function buildRating(result, marketContext) {
   if (fundamentalScore < 35) potentialScore = Math.min(potentialScore, 62);
   if (result.fundamentals?.earningsTiming?.risk === "high") potentialScore = Math.min(potentialScore, 64);
   if (marketContext?.riskOff) potentialScore = Math.min(potentialScore, 66);
+  if (overheatedRsi) potentialScore = Math.min(potentialScore, 78);
+  if (veryOverheatedRsi) potentialScore = Math.min(potentialScore, 72);
+  if (stretchedValuation) potentialScore = Math.min(potentialScore, 82);
+  if (overheatedRsi && stretchedValuation) potentialScore = Math.min(potentialScore, 70);
+  if (overheatedRsi && elevatedVolatility) potentialScore = Math.min(potentialScore, 74);
   potentialScore = Math.round(clamp(potentialScore, 0, 100));
 
   const buyableRisk = Number(plan.stopLossPct ?? 99) <= 8.5 &&
@@ -94,12 +105,20 @@ function buildRating(result, marketContext) {
   let ratingReason = "Structure is not clean enough for a swing entry";
   let action = result.action;
 
-  if (potentialScore >= 68 && buyableRisk && buyTrigger && marketScore >= 45 && fundamentalScore >= 38) {
+  const chaseRisk = overheatedRsi || (stretchedValuation && elevatedVolatility);
+
+  if (potentialScore >= 68 && buyableRisk && buyTrigger && marketScore >= 45 && fundamentalScore >= 38 && !chaseRisk) {
     rating = "BUY";
     ratingReason = breakout.confirmed
       ? "Best available buy candidate: price is breaking/reclaiming resistance with controlled risk"
       : "Best available buy candidate: trend, risk and market context are constructive";
     action = breakout.confirmed ? "BUY: breakout active" : "BUY: use trigger and strict stop";
+  } else if (potentialScore >= 68 && buyableRisk && buyTrigger && signals.priceAboveEmas && marketScore >= 45) {
+    rating = "ACCUMULATE";
+    ratingReason = overheatedRsi
+      ? "Strong breakout, but RSI is stretched; prefer pullback or smaller position instead of chasing"
+      : "Strong setup, but valuation/market risk argues for staged entry";
+    action = "ACCUMULATE: breakout strong, wait for safer entry";
   } else if (potentialScore >= 58 && buyableRisk && signals.priceAboveEmas && marketScore >= 45) {
     rating = "ACCUMULATE";
     ratingReason = "Potential setup: build only near support/trigger and keep position size moderate";

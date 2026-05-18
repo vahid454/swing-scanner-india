@@ -532,7 +532,7 @@ function renderToday(data) {
   const best = data.bestPick;
   todayBestSymbol.textContent = best?.symbol ?? "—";
   todayBestMeta.textContent = best
-    ? `${best.rating ?? best.setup ?? "WATCH"} · Score ${best.potentialScore ?? best.composite ?? "—"} · Entry ${formatCompactPrice(best.entry ?? best.tradePlan?.entry?.trigger)}`
+    ? `${best.rating ?? best.setup ?? "WATCH"} · Score ${best.potentialScore ?? best.composite ?? "—"} · Entry ${formatCompactPrice(best.entry ?? best.tradePlan?.entry?.trigger)} · Target ${formatCompactPrice(best.target1 ?? best.tradePlan?.target1)}`
     : "Waiting for scan/search history";
   todayActivity.textContent = `${data.scanCount ?? 0} / ${data.searchCount ?? 0}`;
   smartCount.textContent = data.smartLookups?.length ?? 0;
@@ -543,7 +543,7 @@ function renderToday(data) {
         <button class="pick-row" type="button" data-symbol="${escapeHtml(pick.symbol)}">
           <span>
             <strong>${escapeHtml(pick.symbol)}</strong>
-            <small>${escapeHtml(pick.rating ?? pick.setup ?? "WATCH")} · ${formatCompactPrice(pick.livePrice)}</small>
+            <small>${escapeHtml(pick.rating ?? pick.setup ?? "WATCH")} · Entry ${formatCompactPrice(pick.entry)} · Target ${formatCompactPrice(pick.target1)}</small>
           </span>
           <b>${escapeHtml(pick.potentialScore ?? pick.composite ?? "—")}</b>
         </button>

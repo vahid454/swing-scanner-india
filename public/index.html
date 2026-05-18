@@ -12,7 +12,12 @@
 
   <header class="header">
     <div class="header__brand">
-      <span class="header__logo">◈</span>
+      <span class="header__logo" aria-hidden="true">
+        <svg viewBox="0 0 40 40" role="img">
+          <path d="M20 3.5 34.3 11.8v16.4L20 36.5 5.7 28.2V11.8L20 3.5Z" />
+          <path d="M12 25.5h4.6l3.1-11 3.7 16 3.1-10.4H32" />
+        </svg>
+      </span>
       <div>
         <h1 class="header__title">NSE Swing Scanner</h1>
         <span class="header__sub">Momentum, fundamentals, market regime, sentiment and risk-aware entry planning</span>
@@ -66,25 +71,20 @@
         <div>
           <span class="section-kicker">Decision desk</span>
           <h2>Today's Picks</h2>
+          <p class="section-note">A compact view of what deserves attention now.</p>
         </div>
         <button class="btn btn--ghost" id="btn-today" type="button">Refresh desk</button>
       </div>
-      <div class="insight-grid">
-        <article class="insight-tile insight-tile--hero">
-          <span>Best setup today</span>
+      <div class="today-focus">
+        <article class="today-hero">
+          <span class="today-hero__label">Primary candidate</span>
           <strong id="today-best-symbol">—</strong>
           <small id="today-best-meta">Waiting for scan/search history</small>
         </article>
-        <article class="insight-tile">
-          <span>Activity</span>
-          <strong id="today-activity">—</strong>
-          <small>Scans / searches today</small>
-        </article>
-        <article class="insight-tile">
-          <span>Smart Lookups</span>
-          <strong id="smart-count">—</strong>
-          <small>High-scoring searched symbols tracked in scans</small>
-        </article>
+        <div class="today-stats">
+          <div><span>Activity</span><strong id="today-activity">—</strong></div>
+          <div><span>Tracked</span><strong id="smart-count">—</strong></div>
+        </div>
       </div>
       <div class="desk-columns">
         <section>
