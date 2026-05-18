@@ -92,6 +92,13 @@ function scoreColor(score) {
   return "score--low";
 }
 
+function scoreTone(score) {
+  if (score === null || score === undefined || Number.isNaN(Number(score))) return "neut";
+  if (Number(score) >= 65) return "bull";
+  if (Number(score) <= 38) return "bear";
+  return "neut";
+}
+
 function sentimentClass(label) {
   if (label === "bullish") return "badge--bullish";
   if (label === "bearish") return "badge--bearish";
@@ -179,7 +186,28 @@ function makeSignalPills(signals) {
     pills.push(`<span class="signal-pill signal-pill--${signals.volumeSpike ? "bull" : "neut"}">Vol ${signals.volRatio ?? "?"}×</span>`);
   }
 
+  if (signals.adx?.value !== null && signals.adx?.value !== undefined) {
+    const tone = signals.adx.score >= 72 ? "bull" : signals.adx.score <= 35 ? "bear" : "neut";
+    pills.push(`<span class="signal-pill signal-pill--${tone}">ADX ${signals.adx.value}</span>`);
+  }
+
+  if (signals.mfi !== null && signals.mfi !== undefined) {
+    const tone = signals.mfi > 80 ? "bear" : signals.mfi >= 45 ? "bull" : "neut";
+    pills.push(`<span class="signal-pill signal-pill--${tone}">MFI ${signals.mfi}</span>`);
+  }
+
+  if (signals.bollinger?.percentB !== null && signals.bollinger?.percentB !== undefined) {
+    const tone = signals.bollinger.score >= 70 ? "bull" : signals.bollinger.score <= 35 ? "bear" : "neut";
+    pills.push(`<span class="signal-pill signal-pill--${tone}">BB ${signals.bollinger.percentB}</span>`);
+  }
+
   return pills.join("");
+}
+
+function setComponentScore(card, selector, score) {
+  const el = card.querySelector(selector);
+  el.textContent = score === null || score === undefined ? "—" : Math.round(score);
+  el.className = `component-score component-score--${scoreTone(score)}`;
 }
 
 function renderCards(stocks) {
@@ -244,6 +272,11 @@ function renderCards(stocks) {
     card.querySelector(".stock-card__signals").innerHTML =
       makeSignalPills(stock.tech?.signals);
 
+    setComponentScore(card, ".tech-score", stock.tech?.score);
+    setComponentScore(card, ".fund-score", stock.fundamentals?.score);
+    setComponentScore(card, ".market-score", stock.market?.score ?? stock.market?.primary?.score);
+    setComponentScore(card, ".news-score", stock.sentiment?.score);
+
     // Sentiment
     const sentLabel = stock.sentiment?.sentiment_label ?? "neutral";
     card.querySelector(".sentiment-badge").textContent = sentLabel;
@@ -258,10 +291,10 @@ function renderCards(stocks) {
     card.querySelector(".rsi-val").style.color =
       rsiVal ? (rsiVal < 40 ? "var(--accent)" : rsiVal > 65 ? "var(--danger)" : "var(--warn)") : "";
 
-    const volRatio = stock.tech?.signals?.volRatio;
-    card.querySelector(".vol-val").textContent = volRatio ? volRatio + "×" : "—";
-    card.querySelector(".vol-val").style.color =
-      volRatio >= 1.5 ? "var(--accent)" : volRatio < 0.8 ? "var(--danger)" : "";
+    const adxVal = stock.tech?.signals?.adx?.value;
+    card.querySelector(".adx-val").textContent = adxVal ? adxVal.toFixed(1) : "—";
+    card.querySelector(".adx-val").style.color =
+      adxVal >= 25 ? "var(--accent)" : adxVal < 16 ? "var(--danger)" : "var(--warn)";
 
     const rr = plan.rewardToRisk;
     card.querySelector(".rr-val").textContent = rr ? rr + "R" : "—";
@@ -314,9 +347,24 @@ function openDrawer(symbol) {
   document.getElementById("drawer-source").textContent = `Source: ${plan.priceSource ?? "latest candle"}`;
 
   const marketFactors = stock.market?.primary?.factors ?? [];
+  const marketWarnings = stock.market?.warnings ?? [];
   const ratingFactor = stock.ratingReason ? [`${stock.rating}: ${stock.ratingReason}`] : [];
+  const fundamentalFactors = [
+    ...(stock.fundamentals?.factors ?? []),
+    ...(stock.fundamentals?.metrics?.pe ? [`P/E ${stock.fundamentals.metrics.pe}`] : []),
+    ...(stock.fundamentals?.metrics?.revenueGrowthPct ? [`Revenue growth ${formatPct(stock.fundamentals.metrics.revenueGrowthPct)}`] : []),
+    ...(stock.fundamentals?.metrics?.operatingMarginPct ? [`Operating margin ${stock.fundamentals.metrics.operatingMarginPct}%`] : []),
+  ];
+  const contextFactors = [
+    ...(stock.market?.factors ?? marketFactors),
+    ...(stock.sentiment?.sentiment_label ? [`News sentiment is ${stock.sentiment.sentiment_label} (${stock.sentiment.score})`] : []),
+    ...(stock.sentiment?.risk_flags ?? []).map((flag) => `News risk: ${flag.category} (${flag.keyword})`),
+  ];
+
   fillList(document.getElementById("drawer-factors"), [...ratingFactor, ...(signals.factors ?? []), ...marketFactors], "No strong confirmation factors yet.");
-  fillList(document.getElementById("drawer-warnings"), signals.warnings, "No major risk warnings from the scanner.");
+  fillList(document.getElementById("drawer-warnings"), [...(signals.warnings ?? []), ...(stock.fundamentals?.warnings ?? []), ...marketWarnings], "No major risk warnings from the scanner.");
+  fillList(document.getElementById("drawer-fundamentals"), fundamentalFactors, "Fundamental data is neutral or unavailable.");
+  fillList(document.getElementById("drawer-context"), contextFactors, "Market and sentiment context is neutral.");
 
   drawer.hidden = false;
   requestAnimationFrame(() => drawer.classList.add("is-open"));

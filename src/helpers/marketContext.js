@@ -97,6 +97,47 @@ function scoreIndex(name, candles) {
   };
 }
 
+function scoreIndiaVix(candles) {
+  if (!candles.length || candles.length < 5) {
+    return {
+      name: "INDIA_VIX",
+      score: 50,
+      status: "unknown",
+      factors: [],
+      warnings: ["India VIX unavailable"],
+    };
+  }
+
+  const closes = candles.map((c) => c.close);
+  const value = closes.at(-1);
+  const change5 = closes.length > 6 ? ((value - closes.at(-6)) / closes.at(-6)) * 100 : 0;
+
+  let status = "calm";
+  let score = 72;
+  if (value >= 20 || change5 >= 18) {
+    status = "fear";
+    score = 25;
+  } else if (value >= 15 || change5 >= 8) {
+    status = "elevated";
+    score = 45;
+  }
+
+  const factors = [];
+  const warnings = [];
+  if (status === "calm") factors.push(`India VIX is calm at ${round(value, 1)}`);
+  if (status !== "calm") warnings.push(`India VIX is ${status} at ${round(value, 1)} (${round(change5, 1)}% 5d)`);
+
+  return {
+    name: "INDIA_VIX",
+    score,
+    status,
+    value: round(value, 2),
+    change5: round(change5, 2),
+    factors,
+    warnings,
+  };
+}
+
 async function fetchIndexContext(name, yahooSymbol) {
   const cacheKey = `market:index:${name}`;
   const cached = await redisClient.get(cacheKey);
@@ -110,7 +151,8 @@ async function fetchIndexContext(name, yahooSymbol) {
     headers: { "user-agent": "Mozilla/5.0 swing-scanner-india" },
   });
   const data = await res.json();
-  const context = scoreIndex(name, parseYahooCandles(data));
+  const candles = parseYahooCandles(data);
+  const context = name === "INDIA_VIX" ? scoreIndiaVix(candles) : scoreIndex(name, candles);
   await redisClient.set(cacheKey, JSON.stringify(context), "EX", CACHE_TTL);
   return context;
 }
@@ -121,16 +163,38 @@ export function sectorIndexName(symbol) {
 
 export async function fetchMarketContext(symbol) {
   const indexName = sectorIndexName(symbol);
-  const [nifty, sector] = await Promise.all([
+  const [nifty, sector, indiaVix] = await Promise.all([
     fetchIndexContext("NIFTY", MARKET_INDEXES.NIFTY),
     indexName === "NIFTY"
       ? Promise.resolve(null)
       : fetchIndexContext(indexName, MARKET_INDEXES[indexName]),
+    fetchIndexContext("INDIA_VIX", MARKET_INDEXES.INDIA_VIX),
   ]);
 
+  const primary = sector ?? nifty;
+  const riskOff = (nifty?.score ?? 50) < 45 && (indiaVix?.score ?? 50) < 45;
+  const score = Math.round(
+    (primary?.score ?? 50) * 0.55 +
+    (nifty?.score ?? 50) * 0.25 +
+    (indiaVix?.score ?? 50) * 0.20
+  );
+
   return {
-    primary: sector ?? nifty,
+    score,
+    regime: score >= 68 ? "risk-on" : score >= 48 ? "mixed" : "risk-off",
+    riskOff,
+    primary,
     nifty,
-    sector: sector ?? nifty,
+    sector: primary,
+    indiaVix,
+    factors: [
+      ...(primary?.factors ?? []),
+      ...(indiaVix?.factors ?? []),
+    ].slice(0, 5),
+    warnings: [
+      ...(primary?.warnings ?? []),
+      ...(indiaVix?.warnings ?? []),
+      ...(riskOff ? ["Risk-off context: weak index structure plus elevated volatility"] : []),
+    ].slice(0, 5),
   };
 }

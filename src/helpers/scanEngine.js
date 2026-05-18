@@ -5,6 +5,7 @@ import { fetchQuote } from "./fetchQuote.js";
 import { SCORE_WEIGHTS, STOCK_ALIASES } from "../config/constants.js";
 import { redisClient } from "../config/redis.js";
 import { fetchMarketContext } from "./marketContext.js";
+import { fetchFundamentalAnalysis } from "./fundamentalAnalysis.js";
 
 function todayKey() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -38,6 +39,10 @@ function buildHistorySummary(result) {
     target2: plan.target2 ?? null,
     rewardToRisk: plan.rewardToRisk ?? null,
     priceSource: plan.priceSource ?? null,
+    technicalScore: result?.tech?.score ?? null,
+    fundamentalScore: result?.fundamentals?.score ?? null,
+    marketScore: result?.market?.score ?? result?.market?.primary?.score ?? null,
+    sentimentScore: result?.sentiment?.score ?? null,
   };
 }
 
@@ -49,23 +54,32 @@ function buildRating(result, marketContext) {
   const signals = result.tech?.signals ?? {};
   const plan = result.tradePlan ?? {};
   const breakout = signals.breakout ?? {};
-  const marketScore = marketContext?.primary?.score ?? 50;
+  const marketScore = marketContext?.score ?? marketContext?.primary?.score ?? 50;
+  const fundamentalScore = result.fundamentals?.score ?? 50;
+  const sentimentRiskCount = result.sentiment?.risk_flags?.length ?? 0;
   const warningPenalty = Math.min((signals.warnings?.length ?? 0) * 3, 12);
 
   let potentialScore = result.composite;
   potentialScore += (marketScore - 50) * 0.18;
+  potentialScore += (fundamentalScore - 50) * 0.14;
   if (signals.priceAboveEmas) potentialScore += 5;
   if (breakout.near) potentialScore += 5;
   if (breakout.confirmed) potentialScore += 6;
+  if (Number(signals.adx?.score ?? 0) >= 72) potentialScore += 3;
+  if (Number(signals.advancedScore ?? 0) >= 70) potentialScore += 3;
   if (Number(plan.stopLossPct ?? 99) <= 6) potentialScore += 4;
   if (Number(signals.rsi ?? 0) >= 45 && Number(signals.rsi ?? 0) <= 68) potentialScore += 3;
   if (Number(signals.volRatio ?? 0) >= 1.1 || Number(signals.intradayVolRatio ?? 0) >= 0.45) potentialScore += 3;
   potentialScore -= warningPenalty;
+  potentialScore -= Math.min(sentimentRiskCount * 4, 10);
   if (!signals.confirmation?.validBreakout) potentialScore = Math.min(potentialScore, 82);
   if (Number(signals.volRatio ?? 0) < 0.75 && Number(signals.intradayVolRatio ?? 0) < 0.45) {
     potentialScore = Math.min(potentialScore, 78);
   }
   if (!signals.priceAboveEmas) potentialScore = Math.min(potentialScore, 55);
+  if (fundamentalScore < 35) potentialScore = Math.min(potentialScore, 62);
+  if (result.fundamentals?.earningsTiming?.risk === "high") potentialScore = Math.min(potentialScore, 64);
+  if (marketContext?.riskOff) potentialScore = Math.min(potentialScore, 66);
   potentialScore = Math.round(clamp(potentialScore, 0, 100));
 
   const buyableRisk = Number(plan.stopLossPct ?? 99) <= 8.5 &&
@@ -77,7 +91,7 @@ function buildRating(result, marketContext) {
   let ratingReason = "Structure is not clean enough for a swing entry";
   let action = result.action;
 
-  if (potentialScore >= 68 && buyableRisk && buyTrigger && marketScore >= 45) {
+  if (potentialScore >= 68 && buyableRisk && buyTrigger && marketScore >= 45 && fundamentalScore >= 38) {
     rating = "BUY";
     ratingReason = breakout.confirmed
       ? "Best available buy candidate: price is breaking/reclaiming resistance with controlled risk"
@@ -117,6 +131,8 @@ export function isActionableCandidate(item) {
     signals.priceAboveEmas === true &&
     Number(plan.stopLossPct ?? 99) <= 8.5 &&
     Number(plan.rewardToRisk ?? 0) >= 1.8 &&
+    Number(item.fundamentals?.score ?? 50) >= 38 &&
+    item.market?.riskOff !== true &&
     (breakout.near === true || breakout.confirmed === true);
 }
 
@@ -133,11 +149,16 @@ export async function analyzeSymbol(symbol) {
     dayLow: quote.low,
     liveVolume: quote.volume,
   });
-  const sentiment = await fetchSentimentScore(normalized);
-  const marketContext = await fetchMarketContext(normalized);
+  const [sentiment, marketContext, fundamentals] = await Promise.all([
+    fetchSentimentScore(normalized),
+    fetchMarketContext(normalized),
+    fetchFundamentalAnalysis(normalized),
+  ]);
 
   const composite = Math.round(
     tech.score * SCORE_WEIGHTS.technical +
+    fundamentals.score * SCORE_WEIGHTS.fundamentals +
+    (marketContext.score ?? marketContext.primary?.score ?? 50) * SCORE_WEIGHTS.market +
     sentiment.score * SCORE_WEIGHTS.sentiment
   );
 
@@ -167,7 +188,9 @@ export async function analyzeSymbol(symbol) {
       headline_count: sentiment.headline_count,
       headlines: sentiment.headlines,
       sentiment_label: sentiment.sentiment_label,
+      risk_flags: sentiment.risk_flags,
     },
+    fundamentals,
     market: marketContext,
   };
 

@@ -11,14 +11,15 @@
  * All sub-scores normalised to 0–100 before weighting.
  */
 
-import { RSI, MACD, EMA, ATR } from "technicalindicators";
+import { RSI, MACD, EMA, ATR, ADX, BollingerBands, MFI, OBV, Stochastic } from "technicalindicators";
 
 const WEIGHTS = {
-  trend:     0.20,
-  breakout:  0.28,
-  volume:    0.20,
+  trend:     0.18,
+  breakout:  0.24,
+  volume:    0.17,
   momentum:  0.16,
-  risk:      0.10,
+  advanced:  0.10,
+  risk:      0.09,
   quality:   0.06,
 };
 
@@ -98,6 +99,9 @@ export function scoreTechnicals(candles, options = {}) {
   const lows    = [...completed.slice(0, -1).map((c) => c.low), latest.low];
   const volumes = completed.map((c) => c.volume);
   const price = livePrice;
+  const ret5 = closes.length > 6 ? ((price - closes.at(-6)) / closes.at(-6)) * 100 : null;
+  const ret20 = closes.length > 21 ? ((price - closes.at(-21)) / closes.at(-21)) * 100 : null;
+  const ret50 = closes.length > 51 ? ((price - closes.at(-51)) / closes.at(-51)) * 100 : null;
 
   const factors = [];
   const warnings = [];
@@ -139,6 +143,44 @@ export function scoreTechnicals(candles, options = {}) {
   }
   if (macdScore >= 70) factors.push("MACD is above signal with positive momentum");
   if (macdScore <= 10) warnings.push("MACD has not confirmed bullish momentum yet");
+
+  // ── Deeper momentum confirmation ─────────────────────────────────────────
+  const adxCurr = ADX.calculate({ high: highs, low: lows, close: closes, period: 14 }).at(-1);
+  let adxScore = 45;
+  if (adxCurr) {
+    if (adxCurr.adx >= 25 && adxCurr.pdi > adxCurr.mdi) adxScore = 92;
+    else if (adxCurr.adx >= 18 && adxCurr.pdi > adxCurr.mdi) adxScore = 72;
+    else if (adxCurr.mdi > adxCurr.pdi) adxScore = 26;
+  }
+  if (adxScore >= 72) factors.push(`ADX ${round(adxCurr.adx, 1)} confirms trend strength`);
+  if (adxScore <= 30) warnings.push("ADX/DMI does not support a bullish trend yet");
+
+  const mfiCurr = MFI.calculate({ high: highs, low: lows, close: closes, volume: volumes, period: 14 }).at(-1);
+  let mfiScore = 50;
+  if (Number.isFinite(mfiCurr)) {
+    if (mfiCurr >= 45 && mfiCurr <= 75) mfiScore = 78;
+    else if (mfiCurr > 80) mfiScore = 24;
+    else if (mfiCurr < 25) mfiScore = 62;
+    else if (mfiCurr < 40) mfiScore = 42;
+  }
+  if (mfiScore >= 75) factors.push(`Money flow is healthy (MFI ${round(mfiCurr, 1)})`);
+  if (mfiScore <= 30) warnings.push(`MFI ${round(mfiCurr, 1)} is overheated; entry risk is higher`);
+
+  const stochastic = Stochastic.calculate({ high: highs, low: lows, close: closes, period: 14, signalPeriod: 3 }).at(-1);
+  let stochasticScore = 50;
+  if (stochastic) {
+    if (stochastic.k > stochastic.d && stochastic.k >= 40 && stochastic.k <= 82) stochasticScore = 74;
+    else if (stochastic.k > 85) stochasticScore = 30;
+    else if (stochastic.k < 25 && stochastic.k > stochastic.d) stochasticScore = 64;
+    else if (stochastic.k < stochastic.d) stochasticScore = 36;
+  }
+
+  const obvValues = OBV.calculate({ close: closes, volume: volumes });
+  const obvRecent = obvValues.slice(-6);
+  const obvSlope = obvRecent.length >= 2 ? obvRecent.at(-1) - obvRecent.at(0) : 0;
+  const obvScore = obvSlope > 0 ? 72 : 34;
+  if (obvScore >= 70) factors.push("OBV is rising, showing accumulation behind the move");
+  else warnings.push("OBV is not confirming accumulation yet");
 
   // ── EMA trend ─────────────────────────────────────────────────────────────
   const ema9  = EMA.calculate({ values: closes, period: 9 });
@@ -203,6 +245,21 @@ export function scoreTechnicals(candles, options = {}) {
   if (distanceToBreakoutPct > 2.8) warnings.push("Price is already far above breakout level; risk of late entry is higher");
   if (closeStrength < 60) warnings.push("Latest candle did not close strongly enough for a clean breakout");
 
+  const bb = BollingerBands.calculate({ values: closes, period: 20, stdDev: 2 }).at(-1);
+  let bbScore = 50;
+  let bbPercent = null;
+  let bbWidthPct = null;
+  if (bb) {
+    bbPercent = (price - bb.lower) / Math.max(bb.upper - bb.lower, 1);
+    bbWidthPct = ((bb.upper - bb.lower) / price) * 100;
+    if (bbPercent >= 0.45 && bbPercent <= 0.92 && bbWidthPct <= 14) bbScore = 78;
+    else if (bbPercent > 1.08) bbScore = 24;
+    else if (bbPercent > 0.92) bbScore = 48;
+    else if (bbPercent < 0.25) bbScore = 40;
+  }
+  if (bbScore >= 75) factors.push("Bollinger position leaves room without looking exhausted");
+  if (bbScore <= 30) warnings.push("Price is stretched outside the upper Bollinger band");
+
   const atrValues = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 });
   const atr = atrValues.at(-1) ?? (price * 0.025);
   const atrPct = (atr / price) * 100;
@@ -241,7 +298,8 @@ export function scoreTechnicals(candles, options = {}) {
   if (bodyPct > 7) warnings.push("Latest candle body is very large; wait for a calmer entry if possible");
   if (!liquidEnough) warnings.push("Average turnover is low for reliable swing execution");
 
-  const momentumScore = Math.round((rsiScore * 0.48) + (macdScore * 0.52));
+  const momentumScore = Math.round((rsiScore * 0.36) + (macdScore * 0.38) + (stochasticScore * 0.26));
+  const advancedScore = Math.round((adxScore * 0.35) + (mfiScore * 0.25) + (obvScore * 0.20) + (bbScore * 0.20));
   const trendScore = emaScore;
 
   const score = Math.round(
@@ -249,6 +307,7 @@ export function scoreTechnicals(candles, options = {}) {
     breakoutScore * WEIGHTS.breakout +
     volumeScore * WEIGHTS.volume +
     momentumScore * WEIGHTS.momentum +
+    advancedScore * WEIGHTS.advanced +
     riskScore * WEIGHTS.risk +
     qualityScore * WEIGHTS.quality
   );
@@ -304,6 +363,38 @@ export function scoreTechnicals(candles, options = {}) {
       trendScore,
       breakoutScore,
       momentumScore,
+      advancedScore,
+      adx: adxCurr ? {
+        value: round(adxCurr.adx, 1),
+        plusDi: round(adxCurr.pdi, 1),
+        minusDi: round(adxCurr.mdi, 1),
+        score: adxScore,
+      } : null,
+      mfi: Number.isFinite(mfiCurr) ? round(mfiCurr, 1) : null,
+      mfiScore,
+      stochastic: stochastic ? {
+        k: round(stochastic.k, 1),
+        d: round(stochastic.d, 1),
+        score: stochasticScore,
+      } : null,
+      obv: {
+        slope: round(obvSlope, 0),
+        rising: obvSlope > 0,
+        score: obvScore,
+      },
+      bollinger: bb ? {
+        upper: round(bb.upper),
+        middle: round(bb.middle),
+        lower: round(bb.lower),
+        percentB: round(bbPercent, 2),
+        widthPct: round(bbWidthPct, 2),
+        score: bbScore,
+      } : null,
+      returns: {
+        ret5: pct(ret5),
+        ret20: pct(ret20),
+        ret50: pct(ret50),
+      },
       riskScore,
       qualityScore,
       confirmation: {

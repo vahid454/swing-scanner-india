@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NSE Swing Scanner</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
       <span class="header__logo">◈</span>
       <div>
         <h1 class="header__title">NSE Swing Scanner</h1>
-        <span class="header__sub">Breakout-led swing candidates with entry, risk and confirmation factors</span>
+        <span class="header__sub">Momentum, fundamentals, market regime, sentiment and risk-aware entry planning</span>
       </div>
     </div>
     <div class="header__meta">
@@ -28,7 +28,7 @@
     <button class="btn btn--primary" id="btn-scan">Run Scan Now</button>
     <button class="btn btn--ghost"   id="btn-refresh">Refresh</button>
     <form class="stock-search" id="stock-search">
-      <input id="stock-search-input" name="query" type="search" placeholder="Search stock name or symbol" autocomplete="off" />
+      <input id="stock-search-input" name="query" type="search" placeholder="Search stock name or symbol, e.g. HDFC Bank" autocomplete="off" />
       <button class="btn btn--ghost" type="submit">Search</button>
     </form>
     <div class="controls__info">
@@ -47,7 +47,7 @@
     <div class="results-grid__empty" id="empty-state">
       <div class="empty-icon">◈</div>
       <p>No live scan loaded.</p>
-      <p>Click <strong>Run Scan Now</strong> to fetch current NSE data.</p>
+      <p>Click <strong>Run Scan Now</strong> to fetch the current NSE opportunity board.</p>
       <small>Manual scans are saved below with today’s date.</small>
     </div>
   </main>
@@ -121,6 +121,13 @@
 
       <div class="stock-card__signals"></div>
 
+      <div class="component-strip">
+        <div><span>Tech</span><strong class="tech-score">—</strong></div>
+        <div><span>Fund</span><strong class="fund-score">—</strong></div>
+        <div><span>Mkt</span><strong class="market-score">—</strong></div>
+        <div><span>News</span><strong class="news-score">—</strong></div>
+      </div>
+
       <div class="stock-card__sentiment">
         <div class="sentiment-row">
           <span class="sentiment-label">Sentiment</span>
@@ -131,7 +138,7 @@
 
       <div class="stock-card__metrics">
         <div class="metric"><span class="metric__k">RSI</span><span class="metric__v rsi-val">—</span></div>
-        <div class="metric"><span class="metric__k">Vol×</span><span class="metric__v vol-val">—</span></div>
+        <div class="metric"><span class="metric__k">ADX</span><span class="metric__v adx-val">—</span></div>
         <div class="metric"><span class="metric__k">R:R</span><span class="metric__v rr-val">—</span></div>
       </div>
 
@@ -165,6 +172,16 @@
         <section>
           <h3>Risk Checks</h3>
           <ul id="drawer-warnings"></ul>
+        </section>
+      </div>
+      <div class="drawer-grid drawer-grid--wide">
+        <section>
+          <h3>Fundamentals</h3>
+          <ul id="drawer-fundamentals"></ul>
+        </section>
+        <section>
+          <h3>Market & Sentiment</h3>
+          <ul id="drawer-context"></ul>
         </section>
       </div>
       <div class="drawer-notes">

@@ -3,25 +3,29 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:        #080b0f;
-  --surface:   #0f1318;
-  --surface2:  #161c24;
-  --surface3:  #101824;
-  --border:    #1e2a38;
-  --text:      #c8d6e5;
-  --muted:     #3d5166;
-  --accent:    #00e5a0;
-  --danger:    #ff4d6d;
-  --warn:      #f5a623;
-  --info:      #4a9eff;
-  --font-mono: "IBM Plex Mono", monospace;
-  --font-ui:   "Space Grotesk", sans-serif;
+  --bg:        #070909;
+  --surface:   #101210;
+  --surface2:  #171b18;
+  --surface3:  #111815;
+  --border:    #26322d;
+  --text:      #d7dfd8;
+  --muted:     #718078;
+  --accent:    #5cf2b4;
+  --danger:    #ff5a71;
+  --warn:      #e8b44c;
+  --info:      #78a8ff;
+  --ink:       #0c110e;
+  --font-mono: "Azeret Mono", monospace;
+  --font-ui:   "Manrope", sans-serif;
   --r:         8px;
   --gap:       1.25rem;
 }
 
 body {
-  background: var(--bg);
+  background:
+    linear-gradient(180deg, rgba(92, 242, 180, 0.05), transparent 260px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 72px),
+    var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 14px;
@@ -43,8 +47,8 @@ body {
   padding-bottom: var(--gap);
 }
 .header__brand  { display: flex; align-items: center; gap: 0.75rem; }
-.header__logo   { font-size: 1.6rem; color: var(--accent); line-height: 1; }
-.header__title  { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.05em; }
+.header__logo   { font-size: 1.6rem; color: var(--accent); line-height: 1; text-shadow: 0 0 24px rgba(92, 242, 180, 0.32); }
+.header__title  { font-size: 1.05rem; font-weight: 800; letter-spacing: 0; }
 .header__sub    { display: block; font-size: 0.72rem; color: #6e8194; margin-top: 1px; max-width: 560px; }
 .header__meta   { display: flex; align-items: center; gap: 1rem; }
 .header__market-time { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
@@ -135,7 +139,7 @@ body {
 }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn:hover:not(:disabled) { transform: translateY(-1px); }
-.btn--primary { background: var(--accent); color: #000; }
+.btn--primary { background: var(--accent); color: var(--ink); box-shadow: 0 10px 30px rgba(92, 242, 180, 0.12); }
 .btn--ghost   { background: transparent; border-color: var(--border); color: var(--text); }
 .btn--ghost:hover:not(:disabled) { background: var(--surface2); }
 
@@ -211,6 +215,7 @@ body {
 /* ── Stock card ── */
 .stock-card {
   background:
+    linear-gradient(135deg, rgba(92, 242, 180, 0.07), transparent 32%),
     linear-gradient(180deg, color-mix(in srgb, var(--surface3) 90%, transparent), var(--surface)),
     var(--surface);
   border: 1px solid var(--border);
@@ -224,7 +229,7 @@ body {
 }
 .stock-card:hover {
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow: 0 18px 55px color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .stock-card--rank-1 { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 
@@ -327,6 +332,36 @@ body {
   font-size: 0.74rem;
   overflow-wrap: anywhere;
 }
+
+.component-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+.component-strip div {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(7, 9, 9, 0.48);
+  padding: 0.46rem 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+.component-strip span {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  text-transform: uppercase;
+}
+.component-score {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+.component-score--bull { color: var(--accent); }
+.component-score--bear { color: var(--danger); }
+.component-score--neut { color: var(--warn); }
 .score-ring {
   width: 100%;
   height: 100%;
@@ -510,6 +545,9 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
+}
+.drawer-grid + .drawer-grid {
+  margin-top: 0.75rem;
 }
 .drawer-grid section {
   padding: 0.8rem;

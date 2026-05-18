@@ -20,11 +20,30 @@ export const WATCHLIST = [
 export const MARKET_INDEXES = {
   NIFTY: "^NSEI",
   BANKNIFTY: "^NSEBANK",
+  INDIA_VIX: "^INDIAVIX",
 };
 
 export const BANKING_SYMBOLS = new Set([
   "HDFCBANK", "ICICIBANK", "AXISBANK", "SBIN",
 ]);
+
+export const STOCK_PROFILES = {
+  RELIANCE: { sector: "Energy", sectorIndex: "NIFTY", industry: "Oil & Gas" },
+  TCS: { sector: "Information Technology", sectorIndex: "NIFTY", industry: "IT Services" },
+  HDFCBANK: { sector: "Financial Services", sectorIndex: "BANKNIFTY", industry: "Private Bank" },
+  INFY: { sector: "Information Technology", sectorIndex: "NIFTY", industry: "IT Services" },
+  ICICIBANK: { sector: "Financial Services", sectorIndex: "BANKNIFTY", industry: "Private Bank" },
+  BAJFINANCE: { sector: "Financial Services", sectorIndex: "BANKNIFTY", industry: "NBFC" },
+  SBIN: { sector: "Financial Services", sectorIndex: "BANKNIFTY", industry: "Public Bank" },
+  WIPRO: { sector: "Information Technology", sectorIndex: "NIFTY", industry: "IT Services" },
+  AXISBANK: { sector: "Financial Services", sectorIndex: "BANKNIFTY", industry: "Private Bank" },
+  LT: { sector: "Industrials", sectorIndex: "NIFTY", industry: "Engineering & Construction" },
+  ADANIENT: { sector: "Conglomerate", sectorIndex: "NIFTY", industry: "Trading & Infrastructure" },
+  MARUTI: { sector: "Consumer Cyclical", sectorIndex: "NIFTY", industry: "Auto" },
+  SUNPHARMA: { sector: "Healthcare", sectorIndex: "NIFTY", industry: "Pharmaceuticals" },
+  TATAMOTORS: { sector: "Consumer Cyclical", sectorIndex: "NIFTY", industry: "Auto" },
+  HCLTECH: { sector: "Information Technology", sectorIndex: "NIFTY", industry: "IT Services" },
+};
 
 export const STOCK_ALIASES = {
   RELIANCEINDUSTRIES: "RELIANCE",
@@ -62,8 +81,10 @@ export const STOCK_ALIASES = {
 export const SCAN_INTERVAL_MS = 5 * 60 * 1000; // every 5 minutes
 
 export const SCORE_WEIGHTS = {
-  technical: 0.85,
-  sentiment: 0.15, // news is useful, but swing breakouts should be led by price/volume
+  technical: 0.62,
+  fundamentals: 0.18,
+  market: 0.10,
+  sentiment: 0.10, // news is useful, but swing breakouts should be led by price/volume
 };
 
 export const TOP_N = 5; // return top N candidates
@@ -73,6 +94,7 @@ export const API = {
   FINNHUB_BASE: "https://finnhub.io/api/v1",
   FINNHUB_WS:   "wss://ws.finnhub.io",
   YAHOO_CHART:   "https://query1.finance.yahoo.com/v8/finance/chart",
+  YAHOO_QUOTE_SUMMARY: "https://query1.finance.yahoo.com/v10/finance/quoteSummary",
 
   // Upstox — free for registered users, real Indian market WebSocket
   // UPSTOX_WS: "wss://api.upstox.com/v2/feed/market-data-streamer",
