@@ -12,7 +12,7 @@
 
 import { Worker } from "bullmq";
 import { bullmqRedis, redisClient } from "../config/redis.js";
-import { analyzeSymbol, isActionableCandidate, saveScanHistory } from "../helpers/scanEngine.js";
+import { analyzeSymbol, getSmartLookupSymbols, isActionableCandidate, saveScanHistory } from "../helpers/scanEngine.js";
 import { WATCHLIST, TOP_N } from "../config/constants.js";
 import { clearRepeatingJobs }        from "../../queues/scanQueue.js";
 
@@ -35,26 +35,37 @@ function ratingPriority(item) {
   return 1;
 }
 
+async function analyzeSymbols(symbols, app, concurrency = 4) {
+  const results = [];
+  for (let i = 0; i < symbols.length; i += concurrency) {
+    const batch = symbols.slice(i, i + concurrency);
+    const settled = await Promise.allSettled(batch.map((symbol) => analyzeSymbol(symbol)));
+    settled.forEach((item, index) => {
+      const symbol = batch[index];
+      if (item.status === "fulfilled") {
+        results.push(item.value);
+      } else {
+        app.log.warn(`[Worker] Skipping ${symbol}: ${item.reason?.message ?? item.reason}`);
+      }
+    });
+  }
+  return results;
+}
+
 export function startScanWorker(app) {
   clearRepeatingJobs();
 
   const worker = new Worker(
     "stock-scan",
     async (job) => {
-      const symbols = job.data.symbols?.length ? job.data.symbols : WATCHLIST;
+      const explicitSymbols = job.data.symbols?.length ? job.data.symbols : null;
+      const smartLookups = explicitSymbols ? [] : await getSmartLookupSymbols(25);
+      const symbols = [...new Set([...(explicitSymbols ?? WATCHLIST), ...smartLookups])];
       const source = job.data.source ?? "scan";
       const query = job.data.query ?? null;
-      app.log.info(`[Worker] Scanning ${symbols.length} symbols…`);
+      app.log.info(`[Worker] Scanning ${symbols.length} symbols (${smartLookups.length} smart lookups)…`);
 
-      const results = [];
-
-      for (const symbol of symbols) {
-        try {
-          results.push(await analyzeSymbol(symbol));
-        } catch (err) {
-          app.log.warn(`[Worker] Skipping ${symbol}: ${err.message}`);
-        }
-      }
+      const results = await analyzeSymbols(symbols, app);
 
       if (results.length === 0) {
         app.log.warn("[Worker] No results — check FINNHUB_API_KEY in .env");
@@ -70,7 +81,7 @@ export function startScanWorker(app) {
       const top = [
         ...actionable,
         ...ranked.filter((item) => !actionable.includes(item)),
-      ].slice(0, Math.min(3, TOP_N));
+      ].slice(0, TOP_N);
 
       // 6. Cache and history
       await redisClient.set("scan:results", JSON.stringify(top), "EX", 300);

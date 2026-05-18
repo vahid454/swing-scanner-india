@@ -8,7 +8,37 @@
 
 import { scanQueue }  from "../../queues/scanQueue.js";
 import { redisClient } from "../config/redis.js";
-import { analyzeSymbol, isActionableCandidate, resolveSymbol, saveScanHistory } from "../helpers/scanEngine.js";
+import {
+  analyzeSymbol,
+  getSmartLookupSummaries,
+  isActionableCandidate,
+  rememberSmartLookup,
+  resolveSymbol,
+  saveScanHistory,
+} from "../helpers/scanEngine.js";
+
+function todayKey() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function rowHasSymbol(row, symbol) {
+  if (!symbol) return true;
+  const normalized = resolveSymbol(symbol) ?? String(symbol).trim().toUpperCase();
+  const pool = [
+    ...(row.summary ?? []),
+    ...(row.results ?? []),
+  ];
+  return pool.some((item) => item?.symbol === normalized);
+}
+
+function topSummary(row) {
+  return row.summary?.[0] ?? row.results?.[0] ?? null;
+}
 
 export default async function scannerRoutes(app) {
   // Latest cached results
@@ -42,6 +72,7 @@ export default async function scannerRoutes(app) {
       const result = await analyzeSymbol(symbol);
       const rows = [result];
       await redisClient.set("scan:results", JSON.stringify(rows), "EX", 300);
+      await rememberSmartLookup(result, query);
       await saveScanHistory(rows, 1, "search", query);
       return reply.send({
         query,
@@ -56,8 +87,54 @@ export default async function scannerRoutes(app) {
 
   app.get("/history", async (req, reply) => {
     const limit = Math.min(Number(req.query.limit) || 25, 100);
-    const rows = await redisClient.lrange("scan:history", 0, limit - 1);
-    return reply.send(rows.map((row) => JSON.parse(row)));
+    const date = String(req.query.date ?? "").trim();
+    const source = String(req.query.source ?? "").trim().toLowerCase();
+    const symbol = String(req.query.symbol ?? "").trim();
+    const rows = await redisClient.lrange("scan:history", 0, 199);
+    const filtered = rows
+      .map((row) => JSON.parse(row))
+      .filter((row) => !date || row.date === date)
+      .filter((row) => !source || source === "all" || row.source === source)
+      .filter((row) => rowHasSymbol(row, symbol))
+      .slice(0, limit);
+    return reply.send(filtered);
+  });
+
+  app.get("/smart-lookups", async (req, reply) => {
+    const limit = Math.min(Number(req.query.limit) || 20, 50);
+    return reply.send(await getSmartLookupSummaries(limit));
+  });
+
+  app.get("/today", async (_req, reply) => {
+    const date = todayKey();
+    const rows = (await redisClient.lrange("scan:history", 0, 199))
+      .map((row) => JSON.parse(row))
+      .filter((row) => row.date === date);
+    const smartLookups = await getSmartLookupSummaries(12);
+
+    const bySymbol = new Map();
+    for (const row of rows) {
+      for (const item of row.summary ?? []) {
+        const existing = bySymbol.get(item.symbol);
+        if (!existing || Number(item.potentialScore ?? 0) > Number(existing.potentialScore ?? 0)) {
+          bySymbol.set(item.symbol, { ...item, source: row.source, scannedAt: row.scannedAt });
+        }
+      }
+    }
+
+    const picks = [...bySymbol.values()]
+      .sort((a, b) => Number(b.potentialScore ?? 0) - Number(a.potentialScore ?? 0))
+      .slice(0, 8);
+    const latest = rows[0] ? topSummary(rows[0]) : null;
+
+    return reply.send({
+      date,
+      scanCount: rows.filter((row) => row.source === "scan").length,
+      searchCount: rows.filter((row) => row.source === "search").length,
+      bestPick: picks[0] ?? latest,
+      picks,
+      smartLookups,
+    });
   });
 
   // Queue health / stats

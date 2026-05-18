@@ -43,43 +43,112 @@
     Add <code>FINNHUB_API_KEY</code> to your <code>.env</code> file for live NSE data.
   </div>
 
-  <main class="results-grid" id="results-grid">
-    <div class="results-grid__empty" id="empty-state">
-      <div class="empty-icon">◈</div>
-      <p>No live scan loaded.</p>
-      <p>Click <strong>Run Scan Now</strong> to fetch the current NSE opportunity board.</p>
-      <small>Manual scans are saved below with today’s date.</small>
-    </div>
-  </main>
+  <nav class="view-tabs" aria-label="Scanner views">
+    <button class="view-tab is-active" type="button" data-tab="results">Live Results</button>
+    <button class="view-tab" type="button" data-tab="today">Today's Picks</button>
+    <button class="view-tab" type="button" data-tab="history">History</button>
+  </nav>
 
-  <section class="history-panel">
-    <div class="history-panel__head">
-      <div>
-        <h2>Scan Calendar</h2>
-        <span>Every manual scan is recorded for review.</span>
+  <section class="tab-panel is-active" id="tab-results">
+    <main class="results-grid" id="results-grid">
+      <div class="results-grid__empty" id="empty-state">
+        <div class="empty-icon">◈</div>
+        <p>No live scan loaded.</p>
+        <p>Click <strong>Run Scan Now</strong> to fetch the current NSE opportunity board.</p>
+        <small>Manual scans are saved below with today’s date.</small>
       </div>
-      <button class="btn btn--ghost" id="btn-history" type="button">Refresh history</button>
+    </main>
+  </section>
+
+  <section class="tab-panel" id="tab-today" hidden>
+    <div class="insight-board" id="insight-board">
+      <div class="insight-board__head">
+        <div>
+          <span class="section-kicker">Decision desk</span>
+          <h2>Today's Picks</h2>
+        </div>
+        <button class="btn btn--ghost" id="btn-today" type="button">Refresh desk</button>
+      </div>
+      <div class="insight-grid">
+        <article class="insight-tile insight-tile--hero">
+          <span>Best setup today</span>
+          <strong id="today-best-symbol">—</strong>
+          <small id="today-best-meta">Waiting for scan/search history</small>
+        </article>
+        <article class="insight-tile">
+          <span>Activity</span>
+          <strong id="today-activity">—</strong>
+          <small>Scans / searches today</small>
+        </article>
+        <article class="insight-tile">
+          <span>Smart Lookups</span>
+          <strong id="smart-count">—</strong>
+          <small>High-scoring searched symbols tracked in scans</small>
+        </article>
+      </div>
+      <div class="desk-columns">
+        <section>
+          <div class="mini-head">
+            <h3>Ranked Today</h3>
+            <span>Best score per symbol</span>
+          </div>
+          <div class="pick-list" id="today-picks">
+            <button class="pick-row" type="button" disabled>No picks yet</button>
+          </div>
+        </section>
+        <section>
+          <div class="mini-head">
+            <h3>Smart Lookups</h3>
+            <span>Click to refresh any name</span>
+          </div>
+          <div class="lookup-strip" id="smart-lookups">
+            <button class="lookup-chip" type="button" disabled>No smart lookups yet</button>
+          </div>
+        </section>
+      </div>
     </div>
-    <div class="history-table-wrap">
-      <table class="history-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Time</th>
-            <th>Type</th>
-            <th>Top setup</th>
-            <th>Grade</th>
-            <th>Score</th>
-            <th>Price</th>
-            <th>Entry</th>
-            <th>Target</th>
-            <th>Scanned</th>
-          </tr>
-        </thead>
-        <tbody id="history-body">
-          <tr><td colspan="10">No scan records yet.</td></tr>
-        </tbody>
-      </table>
+  </section>
+
+  <section class="tab-panel" id="tab-history" hidden>
+    <div class="history-panel">
+      <div class="history-panel__head">
+        <div>
+          <h2>Scan Calendar</h2>
+          <span>Every scan and lookup is recorded for review.</span>
+        </div>
+        <form class="history-filters" id="history-filters">
+          <input id="history-date" type="date" aria-label="Filter history date" />
+          <select id="history-source" aria-label="Filter history source">
+            <option value="all">All</option>
+            <option value="scan">Scans</option>
+            <option value="search">Searches</option>
+          </select>
+          <input id="history-symbol" type="search" placeholder="Symbol" aria-label="Filter history symbol" />
+          <button class="btn btn--ghost" type="submit">Apply</button>
+          <button class="btn btn--ghost" id="btn-history-clear" type="button">Clear</button>
+        </form>
+      </div>
+      <div class="history-table-wrap">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Type</th>
+              <th>Top setup</th>
+              <th>Grade</th>
+              <th>Score</th>
+              <th>Price</th>
+              <th>Entry</th>
+              <th>Target</th>
+              <th>Scanned</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            <tr><td colspan="10">No scan records yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 

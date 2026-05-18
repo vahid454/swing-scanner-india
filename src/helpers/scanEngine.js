@@ -7,6 +7,9 @@ import { redisClient } from "../config/redis.js";
 import { fetchMarketContext } from "./marketContext.js";
 import { fetchFundamentalAnalysis } from "./fundamentalAnalysis.js";
 
+const SMART_LOOKUP_KEY = "scan:smart-lookups";
+const SMART_LOOKUP_TTL = 60 * 60 * 24 * 14;
+
 function todayKey() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
@@ -119,6 +122,43 @@ export function resolveSymbol(input) {
   const normalized = normalizeText(input);
   if (!normalized) return null;
   return STOCK_ALIASES[normalized] ?? normalized;
+}
+
+export async function rememberSmartLookup(result, query = null) {
+  const symbol = result?.symbol;
+  const score = Number(result?.potentialScore ?? result?.composite ?? 0);
+  if (!symbol || score < 55) return false;
+
+  const payload = {
+    symbol,
+    query,
+    rating: result.rating,
+    potentialScore: result.potentialScore,
+    action: result.action,
+    livePrice: result.tradePlan?.livePrice ?? result.tradePlan?.lastClose ?? null,
+    entry: result.tradePlan?.entry?.trigger ?? null,
+    target1: result.tradePlan?.target1 ?? null,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await redisClient.zadd(SMART_LOOKUP_KEY, Date.now(), symbol);
+  await redisClient.zremrangebyrank(SMART_LOOKUP_KEY, 0, -101);
+  await redisClient.set(`scan:smart-lookup:${symbol}`, JSON.stringify(payload), "EX", SMART_LOOKUP_TTL);
+  return true;
+}
+
+export async function getSmartLookupSymbols(limit = 25) {
+  const symbols = await redisClient.zrevrange(SMART_LOOKUP_KEY, 0, Math.max(0, limit - 1));
+  return symbols.map(resolveSymbol).filter(Boolean);
+}
+
+export async function getSmartLookupSummaries(limit = 25) {
+  const symbols = await getSmartLookupSymbols(limit);
+  if (!symbols.length) return [];
+  const rows = await redisClient.mget(...symbols.map((symbol) => `scan:smart-lookup:${symbol}`));
+  return rows
+    .map((row, index) => row ? JSON.parse(row) : { symbol: symbols[index] })
+    .filter(Boolean);
 }
 
 export function isActionableCandidate(item) {

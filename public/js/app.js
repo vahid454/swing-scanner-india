@@ -18,6 +18,7 @@ const API_RESULTS = "/api/scanner/results";
 const API_TRIGGER = "/api/scanner/trigger";
 const API_HISTORY = "/api/scanner/history";
 const API_SEARCH = "/api/scanner/search";
+const API_TODAY = "/api/scanner/today";
 
 // ── DOM ───────────────────────────────────────────────────────────────────
 const grid        = document.getElementById("results-grid");
@@ -38,10 +39,25 @@ const btnHistory = document.getElementById("btn-history");
 const historyBody = document.getElementById("history-body");
 const stockSearch = document.getElementById("stock-search");
 const stockSearchInput = document.getElementById("stock-search-input");
+const viewTabs = document.querySelectorAll(".view-tab");
+const tabPanels = document.querySelectorAll(".tab-panel");
+const btnToday = document.getElementById("btn-today");
+const todayBestSymbol = document.getElementById("today-best-symbol");
+const todayBestMeta = document.getElementById("today-best-meta");
+const todayActivity = document.getElementById("today-activity");
+const smartCount = document.getElementById("smart-count");
+const todayPicks = document.getElementById("today-picks");
+const smartLookups = document.getElementById("smart-lookups");
+const historyFilters = document.getElementById("history-filters");
+const historyDate = document.getElementById("history-date");
+const historySource = document.getElementById("history-source");
+const historySymbol = document.getElementById("history-symbol");
+const btnHistoryClear = document.getElementById("btn-history-clear");
 
 let scanCount = 0;
 let reconnectTimer = null;
 let latestStocks = [];
+let todayLoaded = false;
 
 // ── IST Clock ─────────────────────────────────────────────────────────────
 function tickClock() {
@@ -136,6 +152,11 @@ function formatScanTime(value) {
   });
 }
 
+function formatCompactPrice(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return "₹" + Number(value).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+}
+
 function setupClass(setup) {
   if (setup === "BUY" || setup === "A") return "badge--bullish";
   if (setup === "ACCUMULATE" || setup === "B+" || setup === "B") return "badge--neutral";
@@ -208,6 +229,22 @@ function setComponentScore(card, selector, score) {
   const el = card.querySelector(selector);
   el.textContent = score === null || score === undefined ? "—" : Math.round(score);
   el.className = `component-score component-score--${scoreTone(score)}`;
+}
+
+function activateTab(tabName) {
+  viewTabs.forEach((tab) => {
+    const active = tab.dataset.tab === tabName;
+    tab.classList.toggle("is-active", active);
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  tabPanels.forEach((panel) => {
+    const active = panel.id === `tab-${tabName}`;
+    panel.classList.toggle("is-active", active);
+    panel.hidden = !active;
+  });
+
+  if (tabName === "today" && !todayLoaded) loadToday();
+  if (tabName === "history") loadHistory();
 }
 
 function renderCards(stocks) {
@@ -312,6 +349,7 @@ function renderCards(stocks) {
   lastRunEl.textContent = timeStr;
   scanCountEl.textContent = `${scanCount} scan${scanCount === 1 ? "" : "s"} this session`;
   loadHistory();
+  if (todayLoaded) loadToday();
 }
 
 function fillList(listEl, items, fallback) {
@@ -420,9 +458,7 @@ btnRefresh.addEventListener("click", async () => {
   }
 });
 
-stockSearch.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const query = stockSearchInput.value.trim();
+async function runSearch(query) {
   if (!query) return;
 
   const submitBtn = stockSearch.querySelector("button");
@@ -438,6 +474,7 @@ stockSearch.addEventListener("submit", async (event) => {
     const body = await res.json();
     if (!res.ok) throw new Error(body.error ?? "Search failed");
     renderCards(body.results ?? []);
+    stockSearchInput.value = body.symbol ?? query;
     jobStatusEl.textContent = body.actionable
       ? `${body.symbol} is actionable`
       : `${body.symbol} loaded for review`;
@@ -447,11 +484,21 @@ stockSearch.addEventListener("submit", async (event) => {
     submitBtn.disabled = false;
     setTimeout(() => { jobStatusEl.textContent = ""; }, 8000);
   }
+}
+
+stockSearch.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await runSearch(stockSearchInput.value.trim());
 });
 
 async function loadHistory() {
   try {
-    const res = await fetch(API_HISTORY);
+    const params = new URLSearchParams();
+    if (historyDate.value) params.set("date", historyDate.value);
+    if (historySource.value && historySource.value !== "all") params.set("source", historySource.value);
+    if (historySymbol.value.trim()) params.set("symbol", historySymbol.value.trim());
+    const query = params.toString();
+    const res = await fetch(query ? `${API_HISTORY}?${query}` : API_HISTORY);
     if (!res.ok) throw new Error(res.statusText);
     const rows = await res.json();
     if (!rows.length) {
@@ -481,7 +528,76 @@ async function loadHistory() {
   }
 }
 
-btnHistory.addEventListener("click", loadHistory);
+function renderToday(data) {
+  const best = data.bestPick;
+  todayBestSymbol.textContent = best?.symbol ?? "—";
+  todayBestMeta.textContent = best
+    ? `${best.rating ?? best.setup ?? "WATCH"} · Score ${best.potentialScore ?? best.composite ?? "—"} · Entry ${formatCompactPrice(best.entry ?? best.tradePlan?.entry?.trigger)}`
+    : "Waiting for scan/search history";
+  todayActivity.textContent = `${data.scanCount ?? 0} / ${data.searchCount ?? 0}`;
+  smartCount.textContent = data.smartLookups?.length ?? 0;
+
+  const picks = data.picks ?? [];
+  todayPicks.innerHTML = picks.length
+    ? picks.map((pick) => `
+        <button class="pick-row" type="button" data-symbol="${escapeHtml(pick.symbol)}">
+          <span>
+            <strong>${escapeHtml(pick.symbol)}</strong>
+            <small>${escapeHtml(pick.rating ?? pick.setup ?? "WATCH")} · ${formatCompactPrice(pick.livePrice)}</small>
+          </span>
+          <b>${escapeHtml(pick.potentialScore ?? pick.composite ?? "—")}</b>
+        </button>
+      `).join("")
+    : `<button class="pick-row" type="button" disabled>No picks yet</button>`;
+
+  const lookups = data.smartLookups ?? [];
+  smartLookups.innerHTML = lookups.length
+    ? lookups.map((item) => `
+        <button class="lookup-chip" type="button" data-symbol="${escapeHtml(item.symbol)}">
+          <strong>${escapeHtml(item.symbol)}</strong>
+          <span>${escapeHtml(item.rating ?? "WATCH")} ${escapeHtml(item.potentialScore ?? "—")}</span>
+        </button>
+      `).join("")
+    : `<button class="lookup-chip" type="button" disabled>No smart lookups yet</button>`;
+}
+
+async function loadToday() {
+  try {
+    const res = await fetch(API_TODAY);
+    if (!res.ok) throw new Error(res.statusText);
+    renderToday(await res.json());
+    todayLoaded = true;
+  } catch (_) {
+    todayBestMeta.textContent = "Decision desk unavailable";
+  }
+}
+
+btnToday.addEventListener("click", loadToday);
+viewTabs.forEach((tab) => {
+  tab.addEventListener("click", () => activateTab(tab.dataset.tab));
+});
+
+todayPicks.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-symbol]");
+  if (button) runSearch(button.dataset.symbol);
+});
+
+smartLookups.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-symbol]");
+  if (button) runSearch(button.dataset.symbol);
+});
+
+historyFilters.addEventListener("submit", (event) => {
+  event.preventDefault();
+  loadHistory();
+});
+
+btnHistoryClear.addEventListener("click", () => {
+  historyDate.value = "";
+  historySource.value = "all";
+  historySymbol.value = "";
+  loadHistory();
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────
 openWebSocket();
