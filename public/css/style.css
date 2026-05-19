@@ -67,7 +67,7 @@ body {
   stroke: var(--accent);
   stroke-width: 2;
 }
-.header__logo path:last-child {
+.header__logo path:not(:first-child) {
   stroke: #f3fff8;
   stroke-width: 2.2;
   stroke-linecap: round;

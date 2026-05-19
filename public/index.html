@@ -4,6 +4,49 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NSE Swing Scanner</title>
+  <link
+    rel="icon"
+    type="image/svg+xml"
+    href='data:image/svg+xml,
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+
+      <!-- Dark background -->
+      <path
+        fill="%230f172a"
+        stroke="%2300ff88"
+        stroke-width="2.4"
+        d="M20 3.5 34.3 11.8v16.4L20 36.5 5.7 28.2V11.8L20 3.5Z"
+      />
+
+      <!-- Bold stock line -->
+      <path
+        fill="none"
+        stroke="%2300ff88"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M10 25 16 20 20 23 29 13"
+      />
+
+      <!-- Arrow -->
+      <path
+        fill="none"
+        stroke="%2300ff88"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M25.5 13H29V16.5"
+      />
+
+      <!-- Signal dot -->
+      <circle
+        cx="16"
+        cy="20"
+        r="2"
+        fill="%2300ff88"
+      />
+    </svg>'
+  />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
@@ -12,12 +55,28 @@
 
   <header class="header">
     <div class="header__brand">
-      <span class="header__logo" aria-hidden="true">
-        <svg viewBox="0 0 40 40" role="img">
-          <path d="M20 3.5 34.3 11.8v16.4L20 36.5 5.7 28.2V11.8L20 3.5Z" />
-          <path d="M12 25.5h4.6l3.1-11 3.7 16 3.1-10.4H32" />
-        </svg>
-      </span>
+    <span class="header__logo" aria-hidden="true">
+      <!-- New Scanner Logo -->
+      <svg viewBox="0 0 40 40" role="img">
+        <!-- Hexagon -->
+        <path d="M20 3.5 34.3 11.8v16.4L20 36.5 5.7 28.2V11.8L20 3.5Z" />
+
+        <!-- Stock chart -->
+        <path d="M10 25 16 20 20 23 29 13" />
+
+        <!-- Arrow -->
+        <path d="M25.5 13H29V16.5" />
+
+        <!-- Scanner pulse -->
+        <circle
+          cx="16"
+          cy="20"
+          r="1.6"
+          fill="var(--accent)"
+          stroke="none"
+        />
+      </svg>
+    </span>
       <div>
         <h1 class="header__title">NSE Swing Scanner</h1>
         <span class="header__sub">Momentum, fundamentals, market regime, sentiment and risk-aware entry planning</span>
