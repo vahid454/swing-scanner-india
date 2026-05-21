@@ -178,44 +178,120 @@ function parseAlphaVantageCandles(data, provider) {
   return cleanCandles(candles);
 }
 
-async function fetchWithRetry(url, options = {}, maxRetries = MAX_RETRIES) {
-  let lastError;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+
+
+async function safeParseResponse(res) {
+  const contentType = res.headers.get("content-type") || "";
+
+  // Try JSON first if response says it's JSON
+  if (contentType.includes("application/json")) {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
-      
+      return await res.json();
+    } catch (err) {
+      const text = await res.text();
+
+      return {
+        ok: false,
+        status: res.status,
+        error: "Invalid JSON response",
+        raw: text,
+      };
+    }
+  }
+
+  // Fallback for text/html/plain-text responses
+  const text = await res.text();
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      ok: false,
+      status: res.status,
+      error: text || "Non-JSON response received",
+    };
+  }
+}
+
+async function fetchWithRetry(
+  url,
+  options = {},
+  maxRetries = MAX_RETRIES
+) {
+  let lastError;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    let controller;
+    let timeout;
+
+    try {
+      controller = new AbortController();
+
+      timeout = setTimeout(() => {
+        controller.abort();
+      }, 15000);
+
       const res = await fetch(url, {
         ...options,
         signal: controller.signal,
       });
+
       clearTimeout(timeout);
 
+      // Handle rate limit
       if (res.status === 429) {
-        // Rate limited - wait longer
-        const delay = BASE_DELAY_MS * Math.pow(2, attempt + 2);
-        console.warn(`[Candles] Rate limited, waiting ${delay}ms before retry`);
+        const delay = BASE_DELAY_MS * Math.pow(2, attempt + 1);
+
+        console.warn(
+          `[Fetch] Rate limited (429). Retry ${attempt + 1}/${maxRetries} in ${delay}ms`
+        );
+
         await sleep(delay);
         continue;
       }
 
+      // Handle server errors
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const text = await res.text();
+
+        throw new Error(
+          `HTTP ${res.status}: ${text || res.statusText}`
+        );
       }
 
-      return await res.json();
+      // Safe response parsing
+      return await safeParseResponse(res);
+
     } catch (err) {
+      clearTimeout(timeout);
+
       lastError = err;
+
+      // Timeout
       if (err.name === "AbortError") {
-        console.warn(`[Candles] Request timeout, attempt ${attempt + 1}/${maxRetries}`);
-      } else if (attempt < maxRetries - 1) {
+        console.warn(
+          `[Fetch] Timeout. Attempt ${attempt + 1}/${maxRetries}`
+        );
+      } else {
+        console.warn(
+          `[Fetch] Error: ${err.message}`
+        );
+      }
+
+      // Retry remaining
+      if (attempt < maxRetries - 1) {
         const delay = BASE_DELAY_MS * Math.pow(2, attempt);
-        console.warn(`[Candles] Fetch error: ${err.message}, retrying in ${delay}ms`);
+
+        console.warn(
+          `[Fetch] Retrying in ${delay}ms`
+        );
+
         await sleep(delay);
       }
     }
   }
-  throw lastError;
+
+  throw lastError || new Error("Fetch failed after retries");
 }
 
 async function fetchFinnhubCandles(symbol) {
