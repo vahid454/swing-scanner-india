@@ -21,15 +21,15 @@ import { API } from "../config/constants.js";
 const CACHE_TTL = 300; // 5 minutes for fresh data
 const STALE_TTL = 3600; // 1 hour for stale fallback
 const DAYS_BACK = 180;
-const MIN_CANDLES = 55;
+const MIN_CANDLES = 40;
 const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 200;
+const BASE_DELAY_MS = 1200;
 
 // Rate limiting state per provider
 const rateLimiter = {
   finnhub: { lastCall: 0, minInterval: 120, failures: 0, disabled: false },
-  yahoo: { lastCall: 0, minInterval: 50, failures: 0, disabled: false },
-  yahooV8: { lastCall: 0, minInterval: 50, failures: 0, disabled: false },
+  yahoo: { lastCall: 0, minInterval: 900, failures: 0, disabled: false },
+  yahooV8: { lastCall: 0, minInterval: 900, failures: 0, disabled: false },
   alphaVantage: { lastCall: 0, minInterval: 800, failures: 0, disabled: false },
 };
 
@@ -95,7 +95,7 @@ function isUsableCandles(candles, minRequired = MIN_CANDLES) {
         Number.isFinite(c.high) &&
         Number.isFinite(c.low) &&
         Number.isFinite(c.close) &&
-        Number.isFinite(c.volume) &&
+        (c.volume >= 0 || c.volume === 0) &&
         c.open > 0 &&
         c.high > 0 &&
         c.low > 0 &&
@@ -137,28 +137,50 @@ function parseFinnhubCandles(data, provider) {
 
 function parseYahooCandles(data, provider) {
   const result = data?.chart?.result?.[0];
-  const timestamps = result?.timestamp ?? [];
-  const quote = result?.indicators?.quote?.[0];
-  if (!timestamps.length || !quote) return [];
+
+  if (!result) {
+    console.warn("[Yahoo Parse] No result");
+    return [];
+  }
+
+  const timestamps = result.timestamp ?? [];
+  const quote = result.indicators?.quote?.[0];
+
+  if (!timestamps.length || !quote) {
+    console.warn("[Yahoo Parse] Missing timestamps or quote");
+    return [];
+  }
 
   const candles = timestamps
-    .map((time, i) => ({
-      time,
-      open: Number(quote.open?.[i]),
-      high: Number(quote.high?.[i]),
-      low: Number(quote.low?.[i]),
-      close: Number(quote.close?.[i]),
-      volume: Number(quote.volume?.[i]),
-      provider,
-    }))
+    .map((time, i) => {
+      const open = Number(quote.open?.[i] ?? 0);
+      const high = Number(quote.high?.[i] ?? 0);
+      const low = Number(quote.low?.[i] ?? 0);
+      const close = Number(quote.close?.[i] ?? 0);
+      const volume = Number(quote.volume?.[i] ?? 0);
+
+      return {
+        time,
+        open,
+        high,
+        low,
+        close,
+        volume,
+        provider,
+      };
+    })
     .filter(
       (c) =>
-        Number.isFinite(c.open) &&
-        Number.isFinite(c.high) &&
-        Number.isFinite(c.low) &&
-        Number.isFinite(c.close) &&
-        Number.isFinite(c.volume)
+        c.open > 0 &&
+        c.high > 0 &&
+        c.low > 0 &&
+        c.close > 0
     );
+
+  console.log(
+    `[Yahoo Parse] ${provider}: ${candles.length} candles`
+  );
+
   return cleanCandles(candles);
 }
 
@@ -342,9 +364,27 @@ async function fetchYahooCandles(symbol) {
   try {
     const data = await fetchWithRetry(url, {
       headers: {
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        accept: "application/json",
-      },
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
+
+      "Accept":
+        "application/json,text/plain,*/*",
+
+      "Accept-Language":
+        "en-US,en;q=0.9",
+
+      "Referer":
+        "https://finance.yahoo.com/",
+
+      "Origin":
+        "https://finance.yahoo.com",
+
+      "Cache-Control":
+        "no-cache",
+
+      "Pragma":
+        "no-cache",
+    },
     });
     const candles = parseYahooCandles(data, "yahoo-chart");
     
@@ -375,9 +415,26 @@ async function fetchYahooV8Candles(symbol) {
   try {
     const data = await fetchWithRetry(url, {
       headers: {
-        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-        accept: "*/*",
-        "accept-language": "en-US,en;q=0.9",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
+
+        "Accept":
+          "application/json,text/plain,*/*",
+
+        "Accept-Language":
+          "en-US,en;q=0.9",
+
+        "Referer":
+          "https://finance.yahoo.com/",
+
+        "Origin":
+          "https://finance.yahoo.com",
+
+        "Cache-Control":
+          "no-cache",
+
+        "Pragma":
+          "no-cache",
       },
     });
     const candles = parseYahooCandles(data, "yahoo-v8");
@@ -523,7 +580,7 @@ export async function fetchCandles(symbol) {
  * @param {number} concurrency
  * @returns {Map<string, {candles: Array, error: string|null}>}
  */
-export async function fetchCandlesBatch(symbols, concurrency = 3) {
+export async function fetchCandlesBatch(symbols, concurrency = 1) {
   const results = new Map();
   
   for (let i = 0; i < symbols.length; i += concurrency) {
