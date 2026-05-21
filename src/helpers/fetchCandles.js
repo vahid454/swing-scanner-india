@@ -483,7 +483,7 @@ export async function fetchCandles(symbol) {
 
   // Step 2: Try providers in sequence
   const providers = [
-    { name: "Finnhub", fn: fetchFinnhubCandles },
+   
     { name: "Yahoo Chart", fn: fetchYahooCandles },
     { name: "Yahoo V8", fn: fetchYahooV8Candles },
     { name: "Alpha Vantage", fn: fetchAlphaVantageCandles },
